@@ -1,0 +1,54 @@
+# -*-shell-script-*-
+
+SCRIPT="$(basename $0)"
+BASEDIR="$(readlink -f $(dirname $0))"
+[ -z "$LOGLEVEL" ] && LOGLEVEL=2
+[ -z "$LOGDATEFORMAT" ] && LOGDATEFORMAT="%Y-%m-%d %H:%M:%S "
+
+function log {
+    local now=""
+	[ -n "$LOGDATEFORMAT" ] && now=$(date +"$LOGDATEFORMAT")
+	echo "$SCRIPT $now$@" >&2
+}
+
+function debug {
+    [ "$LOGLEVEL" -lt 3 ] && return
+	log "[DEBUG] $@"
+}
+
+function info {
+    [ "$LOGLEVEL" -lt 2 ] && return
+	log "[INFO]  $@"
+}
+
+function warn {
+    [ "$LOGLEVEL" -lt 1 ] && return
+	log "[WARN]  $@"
+}
+
+function error {
+    log "[ERROR] $@"
+}
+
+function die {
+    error "$@"
+	exit 1
+}
+
+function parseArg {
+    local _name="$1"
+	local _value="$2"
+	local _default="$3"
+	if [ -z "$_value" ]; then
+		if [ -z "$_default" ]; then
+			die "Required argument '$_name' is undefined"
+		fi
+		if [ "$_default" = "*EMPTY*" ]; then
+			_value=""
+		else
+			_value="$_default"
+		fi
+	fi
+	debug "$_name=\"$_value\""
+	eval "$_name=\"$_value\""
+}

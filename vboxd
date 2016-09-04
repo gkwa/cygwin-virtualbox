@@ -1,0 +1,58 @@
+#!/bin/bash
+# -*- sh -*-
+
+##
+## Manages start / stop of VirtualBox virtual machines
+##
+
+## load common functions
+basedir="$(readlink -f $(dirname $0))"
+source "$basedir/.libcommon" || exit 1
+
+## parse arguments
+parseArg vmName "$1" "$VBOXD_VM_NAME"
+parseArg vmPort "$2" "$VBOXD_VM_PORT"
+
+## define signal handler
+function onHalt {
+    warn "Stopping virtual machine '$vmName'"
+	"$VBOX_INSTALL_PATH/VBoxManage" controlvm "$vmName" savestate
+	exit 0
+}
+
+## install signal handler; cygrunsrv uses SIGTERM by default
+trap 'onHalt' TERM
+
+## hardcode this path if you like; it's required for VBox* utils to
+## find the correct VirtualBox.xml config file and is usually set
+## during a call to vboxd-install.
+#export VBOX_USER_HOME="$USERPROFILE\\.VirtualBox"
+
+## default VBoxHeadless port specification
+portSpec="-p $vmPort"
+
+## determine vm state
+info "Querying virtual machine '$vmName' state"
+vmState=$( \
+    "$VBOX_INSTALL_PATH/VBoxManage" showvminfo "$vmName" \
+	    | grep '^State:' \
+		| sed 's/State: *//' )
+info "Virtual machine '$vmName' is $vmState"
+
+## if vm state is saved, we can't specify port without an exception,
+## as port spec requires modification of the (immutable) saved machine
+## state. See http://www.virtualbox.de/ticket/3609
+if  [ "${vmState##saved}" != "$vmState" ]; then
+    ## state is saved; clear port specification
+	warn "Port specification is not allowed for saved vms"
+	portSpec=""
+fi
+
+## start the VM
+info "Starting virtual machine '$vmName' on port $vmPort"
+"$VBOX_INSTALL_PATH/VBoxHeadless" -s "$vmName" $portSpec &
+
+## record pid of VBoxHeadless child process and wait on it
+pid="$!"
+info "Waiting on VBoxHeadless child process $pid"
+wait "$pid"

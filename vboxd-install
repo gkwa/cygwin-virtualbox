@@ -1,0 +1,54 @@
+#!/bin/bash
+# -*- sh -*-
+
+##
+## Registers a VirtualBox virtual machine to start as a service via cygrunsrv
+##
+
+## load common functions
+basedir="$(readlink -f $(dirname $0))"
+source "$basedir/.libcommon" || exit 1
+
+## test for presence of cygrunsrv utility
+if [ ! -x "$(which cygrunsrv)" ]; then
+	die "Utility 'cygrunsrv' is not in path"
+fi
+
+## test VirtualBox configuration
+if [ -z "$VBOX_USER_HOME" ]; then
+	die "Required environment variable 'VBOX_USER_HOME' is undefined. " \
+		"Please ensure this variable is set to point to the directory " \
+		"containing your VirtualBox.xml configuration file."
+fi
+configFile=$(cygpath -u "$VBOX_USER_HOME\\VirtualBox.xml")
+if [ ! -e "$configFile" ]; then
+	die "VirtualBox configuration file '$(cygpath -w $configFile)' not found"
+fi
+
+## parse arguments
+parseArg vmName "$1"
+parseArg vmPort "$2"
+parseArg vmUser "$3" "SYSTEM"
+
+## if vmUser is not SYSTEM, update userSpec
+userSpec="--interactive"
+if [ "$vmUser" != "SYSTEM" ]; then
+	## "interactive" option disallowed when user is specified
+	userSpec="--user \"$vmUser\""
+fi
+
+## install the service
+cygrunsrv \
+	--install "vboxd-$vmName" \
+	--path "$basedir/vboxd" \
+	--env "VBOXD_VM_NAME=$vmName" \
+	--env "VBOXD_VM_PORT=$vmPort" \
+	--env "VBOX_USER_HOME=$VBOX_USER_HOME" \
+	--desc "VirtualBox virtual machine '$vmName' on port $vmPort" \
+	$userSpec \
+	--type auto \
+	--termsig TERM \
+	--shutsig TERM \
+	--neverexits \
+	--preshutdown \
+	|| die "Failed to install service"
